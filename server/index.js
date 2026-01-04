@@ -39,10 +39,17 @@ app.post('/api/generate', async (req, res) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(API_KEY)}`;
 
     const body = {
-      prompt: { text: prompt },
-      temperature,
-      maxOutputTokens,
-    };
+  contents: [
+    {
+      parts: [{ text: prompt }]
+    }
+  ],
+  generationConfig: {
+    temperature,
+    maxOutputTokens
+  }
+};
+
 
     const response = await axios.post(url, body, { timeout: 60000 });
     return res.status(200).json(response.data);
