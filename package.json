@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "node server/index.js",
     "server": "node server/index.js",
+    "test:generate": "node ./scripts/testGenerate.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

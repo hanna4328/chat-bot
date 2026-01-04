@@ -7,7 +7,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
-const API_KEY = process.env.GENERATIVE_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const API_KEY = process.env.GENERATIVE_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.VITE_API_BASE;
 
 if (!API_KEY) {
   console.warn('Warning: GENERATIVE_API_KEY not set. The server will reject generate requests.');
@@ -36,7 +36,8 @@ app.post('/api/generate', async (req, res) => {
 
   try {
     // Use the correct provider action suffix
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(API_KEY)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(API_KEY)}`;
+
     const body = {
       prompt: { text: prompt },
       temperature,
