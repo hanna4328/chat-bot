@@ -40,11 +40,25 @@ export default async function handler(req, res) {
     const status = err.response?.status || 500;
     const data = err.response?.data || { message: err.message };
 
+    // Extra server-side logging to help diagnose provider errors (does not log the API key)
+    try {
+      console.error('Generative API error:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        headers: err.response?.headers,
+        message: err.message,
+        stack: err.stack?.split('\n').slice(0,3),
+      });
+    } catch (logErr) {
+      console.error('Error logging generative API failure', logErr?.message || logErr);
+    }
+
     // Propagate Retry-After when rate-limited
     if (err.response?.status === 429 && err.response.headers?.["retry-after"]) {
       res.setHeader("Retry-After", err.response.headers["retry-after"]);
     }
 
-    return res.status(status).json({ error: data });
+    // Return provider error body (safe) to client for debugging
+    return res.status(status).json({ error: data, _note: 'See server logs for more details' });
   }
 }

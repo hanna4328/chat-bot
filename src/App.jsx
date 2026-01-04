@@ -183,10 +183,15 @@ function App() {
         "You are a friendly and helpful ONWARD chatbot. Be encouraging, reflective, and concise.";
       const prompt = `${context}\n\nUser question: ${question}`;
 
+      // Resolve backend URL (can be set via Vercel env VITE_API_BASE)
+      const API_BASE = import.meta.env.VITE_API_BASE || '';
+      const apiBaseClean = API_BASE ? API_BASE.replace(/\/$/, '') : '';
+      const apiUrl = apiBaseClean ? `${apiBaseClean}/api/generate` : '/api/generate';
+
       // Call backend proxy
       let data;
       try {
-        const resp = await fetch('/api/generate', {
+        const resp = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt, modelId }),
