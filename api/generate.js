@@ -27,6 +27,11 @@ export default async function handler(req, res) {
     // Helpful debug log (does not include secret)
     console.log('Proxy calling generative API', { model: normalizedModel, maxOutputTokens, temperature });
 
+    // Debug-only mode: when ?debug=1 or header x-debug: true, return constructed request (no key, no external call)
+    if (String(req.query?.debug) === '1' || String(req.headers?.['x-debug']) === 'true') {
+      return res.status(200).json({ debug: { model: normalizedModel, url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalizedModel)}:generate`, body } });
+    }
+
     const response = await axios.post(url, body, { timeout: 20000 });
 
     // Forward the provider response directly for the frontend to parse
