@@ -14,16 +14,29 @@ if (!API_KEY) {
 }
 
 app.use(cors());
-app.use(express.json());
+// Capture raw request body (for debugging malformed JSON) and parse JSON normally
+app.use(express.json({
+  verify: (req, res, buf) => {
+    try {
+      req.rawBody = buf && buf.toString();
+    } catch (e) {
+      req.rawBody = undefined;
+    }
+  },
+}));
 
 app.post('/api/generate', async (req, res) => {
-  const { prompt, modelId, temperature = 0.7, maxOutputTokens = 512 } = req.body;
+  // Debug: log incoming headers and a short preview of the raw body (won't log secrets)
+  console.log('Incoming /api/generate', { headers: req.headers, rawBodyPreview: req.rawBody ? req.rawBody.slice(0, 1000) : undefined });
+
+  const { prompt, modelId, temperature = 0.7, maxOutputTokens = 512 } = req.body || {};
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API key' });
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
   if (!modelId) return res.status(400).json({ error: 'Missing modelId' });
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(API_KEY)}`;
+    // Use the correct provider action suffix
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(API_KEY)}`;
     const body = {
       prompt: { text: prompt },
       temperature,
@@ -39,6 +52,15 @@ app.post('/api/generate', async (req, res) => {
     }
     return res.status(500).json({ error: String(err) });
   }
+});
+
+// JSON parse error handler (graceful response + helpful logs)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('Invalid JSON received', { rawBody: req.rawBody, headers: req.headers });
+    return res.status(400).json({ error: 'Invalid JSON in request body' });
+  }
+  next(err);
 });
 
 app.listen(port, () => console.log(`Server listening on http://localhost:${port}`));
