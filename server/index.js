@@ -47,11 +47,11 @@ app.post("/api/generate", async (req, res) => {
    * ✅ Use a CURRENT, VALID model
    * gemini-pro is deprecated on v1beta
    */
-  const model = "gemini-1.5-flash";
+ const model = "models/gemini-1.0-pro";
 
   try {
     const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` +
+      `https://generativelanguage.googleapis.com/v1beta/models/models/gemini-1.0-pro:generateContent` +
       `?key=${API_KEY}`;
 
     /**
