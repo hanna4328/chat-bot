@@ -14,13 +14,18 @@ export default async function handler(req, res) {
   if (!key) return res.status(500).json({ error: "Missing GENERATIVE_API_KEY environment variable on the server" });
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(key)}`;
+    // Normalize model ID: accept either "models/gemma-3-1b-it" or "gemma-3-1b-it"
+    const normalizedModel = String(modelId || "").replace(/^models\//i, "");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalizedModel)}:generate?key=${encodeURIComponent(key)}`;
 
     const body = {
       prompt: { text: prompt },
       temperature,
       maxOutputTokens,
     };
+
+    // Helpful debug log (does not include secret)
+    console.log('Proxy calling generative API', { model: normalizedModel, maxOutputTokens, temperature });
 
     const response = await axios.post(url, body, { timeout: 20000 });
 
