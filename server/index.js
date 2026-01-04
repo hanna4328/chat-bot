@@ -9,14 +9,13 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 /**
- * 🔐 IMPORTANT
- * Backend should ONLY read a backend key.
- * Do NOT fall back to VITE_* variables here.
+ * ✅ Backend MUST only use a backend key
+ * Do NOT use VITE_* variables here
  */
 const API_KEY = process.env.GENERATIVE_API_KEY;
 
 if (!API_KEY) {
-  console.warn("⚠️ GENERATIVE_API_KEY is not set on the server");
+  console.error("❌ GENERATIVE_API_KEY is missing on the server");
 }
 
 /**
@@ -24,6 +23,13 @@ if (!API_KEY) {
  */
 app.use(cors());
 app.use(express.json());
+
+/**
+ * Health check (useful for Render)
+ */
+app.get("/", (req, res) => {
+  res.json({ status: "OK", message: "Backend running" });
+});
 
 /**
  * POST /api/generate
@@ -44,15 +50,16 @@ app.post("/api/generate", async (req, res) => {
   }
 
   /**
-   * ✅ Use a CURRENT, VALID model
-   * gemini-pro is deprecated on v1beta
+   * ✅ ONLY model that is guaranteed to work
+   * with v1beta + generateContent
    */
- const model = "models/gemini-1.0-pro";
+  const model = "models/gemini-1.0-pro";
 
   try {
     const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/models/gemini-1.0-pro:generateContent` +
-      `?key=${API_KEY}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        model
+      )}:generateContent?key=${API_KEY}`;
 
     /**
      * ✅ Correct Gemini request body
@@ -77,7 +84,7 @@ app.post("/api/generate", async (req, res) => {
   } catch (err) {
     console.error(
       "❌ Gemini proxy error:",
-      err?.response?.data || err.message
+      err.response?.data || err.message
     );
 
     if (err.response) {
@@ -88,13 +95,6 @@ app.post("/api/generate", async (req, res) => {
 
     return res.status(500).json({ error: "Internal server error" });
   }
-});
-
-/**
- * Health check (optional but helpful)
- */
-app.get("/", (req, res) => {
-  res.json({ status: "OK", message: "Backend is running" });
 });
 
 app.listen(port, () => {
