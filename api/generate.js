@@ -1,31 +1,46 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export default async function handler(req, res) {
   const apiKey = process.env.GENERATIVE_API_KEY || 
                  process.env.VITE_GEMINI_API_KEY || 
                  process.env.GEMINI_API_KEY;
 
-  if (!apiKey) return res.status(500).json({ error: "API Key Missing" });
+  if (!apiKey) {
+    return res.status(500).json({ error: "Server Error: API Key is missing." });
+  }
+
+  const { prompt } = req.body;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Using 'gemini-1.5-flash-latest' is the safest way to target the model
-    // without hitting a specific version that might be deprecated/not found.
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    // We call the v1 endpoint directly instead of v1beta
+    // This is the most stable production endpoint
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+      }
+    );
 
-    const { prompt } = req.body;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const data = await response.json();
 
-    if (!text) throw new Error("Empty response from AI");
+    if (data.error) {
+      return res.status(response.status).json({ error: data.error.message });
+    }
 
-    return res.status(200).json({ text });
+    // Extracting the text from the standard Google response shape
+    const aiText = data.candidates[0].content.parts[0].text;
+
+    return res.status(200).json({ text: aiText });
   } catch (error) {
-    console.error("Vercel Proxy Error:", error.message);
-    // This sends the actual Google error back to your browser console
-    return res.status(500).json({ error: error.message });
+    console.error("Fetch Error:", error.message);
+    return res.status(500).json({ error: "Failed to communicate with Gemini API" });
   }
 }
