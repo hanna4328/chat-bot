@@ -74,46 +74,47 @@ function App() {
   }, [chatHistory]);
 
   const askAI = async () => {
-    if (!question.trim() || loading) return;
+  if (!question.trim() || loading) return;
 
-    setLoading(true);
-    setError("");
-    
-    const currentQuestion = question;
-    const userMsg = { role: "user", text: currentQuestion };
-    const updatedHistory = [...chatHistory, userMsg];
-    
-    setChatHistory(updatedHistory);
-    setQuestion("");
+  setLoading(true);
+  setError("");
+  
+  const currentQuestion = question;
+  const userMsg = { role: "user", text: currentQuestion };
+  const updatedHistory = [...chatHistory, userMsg];
+  
+  setChatHistory(updatedHistory);
+  setQuestion("");
 
-    try {
-      // --- CONSTRUCTING THE MEMORY MANUALLY ---
-      // This creates a transcript of the last few messages so the AI remembers.
-      const historyContext = updatedHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join("\n");
-      const fullPrompt = `You are a friendly and helpful ONWARD chatbot. Be encouraging and concise.\n\nConversation History:\n${historyContext}\n\nAssistant:`;
+  try {
+    // Construct the transcript for memory
+    const historyContext = updatedHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join("\n");
+    const fullPrompt = `You are a friendly and helpful ONWARD chatbot. Be encouraging and concise.\n\nConversation History:\n${historyContext}\n\nAssistant:`;
 
-      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-      const genAI = new GoogleGenerativeAI(API_KEY);
-      const model = genAI.getGenerativeModel({ model: modelId });
+    // Talk to YOUR Vercel Proxy, not Google directly
+    const resp = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: fullPrompt }),
+    });
 
-      const result = await model.generateContent(fullPrompt);
-      const response = await result.response;
-      const text = response.text();
+    const data = await resp.json();
 
-      const importantMatch = /win|celebrat|onward|congrat|proud/i;
-      setChatHistory(prev => [...prev, { 
-        role: 'model', 
-        text: text, 
-        important: importantMatch.test(text) 
-      }]);
-    } catch (err) {
-      console.error(err);
-      setError("I had trouble connecting. Please try again!");
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (data.error) throw new Error(data.error);
 
+    const importantMatch = /win|celebrat|onward|congrat|proud/i;
+    setChatHistory(prev => [...prev, { 
+      role: 'model', 
+      text: data.text, 
+      important: importantMatch.test(data.text) 
+    }]);
+  } catch (err) {
+    console.error(err);
+    setError("Connection lost. Check if GENERATIVE_API_KEY is set in Vercel.");
+  } finally {
+    setLoading(false);
+  }
+};
   if (!showChat) {
     return (
       <div className="welcome-container">
