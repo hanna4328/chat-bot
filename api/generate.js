@@ -3,28 +3,20 @@ export default async function handler(req, res) {
                  process.env.VITE_GEMINI_API_KEY || 
                  process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: "Server Error: API Key is missing." });
-  }
+  if (!apiKey) return res.status(500).json({ error: "API Key Missing in Vercel" });
 
   const { prompt } = req.body;
 
   try {
-    // We call the v1 endpoint directly instead of v1beta
-    // This is the most stable production endpoint
+    // 2026 Stable Model: gemini-2.5-flash
+    // Using the /v1/ endpoint which is the production standard now
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }],
-            },
-          ],
+          contents: [{ parts: [{ text: prompt }] }],
         }),
       }
     );
@@ -32,15 +24,14 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (data.error) {
-      return res.status(response.status).json({ error: data.error.message });
+      // This will tell us if it's a key issue or a model issue
+      return res.status(data.error.code || 500).json({ error: data.error.message });
     }
 
-    // Extracting the text from the standard Google response shape
     const aiText = data.candidates[0].content.parts[0].text;
-
     return res.status(200).json({ text: aiText });
+
   } catch (error) {
-    console.error("Fetch Error:", error.message);
-    return res.status(500).json({ error: "Failed to communicate with Gemini API" });
+    return res.status(500).json({ error: "Network Error: Could not reach Google." });
   }
 }
