@@ -61,6 +61,22 @@ body {
   padding: 40px;
 }
 
+.app-container {
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.142);
+  width: 90%;
+  max-width: 900px;
+  height: 80vh; /* Fixed height for desktop */
+  margin: 40px auto;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  position: relative;
+  overflow: hidden;
+  z-index: 10;
+}
+
+
 /* Typography */
 h1 {
   font-size: 3.5rem;
@@ -79,12 +95,12 @@ p {
 
 /* Chat History */
 .chat-history {
-  flex-grow: 1;
-  padding: 30px;
+  flex: 1;
   overflow-y: auto;
+  /* This ensures content can be pushed up even if there is only one message */
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  padding: 20px;
 }
 
 .message {
@@ -180,15 +196,15 @@ p {
   50% { transform: translateY(-5px); }
 }
 .input-area {
+  background: rgb(0, 0, 0);
+  padding: 10px;
+  /* This prevents the keyboard from overlapping the input on iOS/Android */
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid #eee;
   display: flex;
-  align-items: center; 
-  gap: 12px;
-  background: #000000;
-  padding: 10px 15px;
-  border-radius: 30px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  align-items: center;
+  gap: 10px;
 }
-
 .send-circle-btn {
   width: 40px;
   height: 40px;
@@ -215,4 +231,21 @@ p {
   margin-left: 2px; 
   display: block;
   line-height: 1;
+}
+
+@media (max-width: 600px) {
+  .app-container {
+    width: 100%;
+    height: 100dvh;     /* 'dvh' is the secret for keyboard height */
+    margin: 0;
+    border-radius: 0;
+    position: fixed;    /* Keeps the app from "bouncing" away */
+    top: 0;
+    left: 0;
+  }
+
+  .input-area {
+    /* Respects the curved 'home bar' on iPhones */
+    padding-bottom: env(safe-area-inset-bottom, 15px);
+  }
 }

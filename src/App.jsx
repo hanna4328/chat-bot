@@ -13,8 +13,14 @@ function App() {
 
   // --- Scrolling Logic ---
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // 1. Scroll the chat list to the bottom
+  chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  
+  // 2. Force the browser to focus on the input area's position
+  if (window.visualViewport) {
+    window.scrollTo(0, 0); // Reset any weird browser offsets
+  }
+};
 
   // Automatically scroll when messages update or loading state changes
   useEffect(() => {
@@ -169,15 +175,24 @@ function App() {
       )}
 
       <div className="input-area">
-        <textarea
-          rows="1"
-          placeholder="Share a promise..."
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          ref={inputRef}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), askAI())}
-          onFocus={() => setTimeout(scrollToBottom, 300)}
-        />
+      <textarea
+  rows="1"
+  placeholder="Share a promise..."
+  value={question}
+  onChange={(e) => setQuestion(e.target.value)}
+  ref={inputRef}
+  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), askAI())}
+  
+  /* ADD/UPDATE THIS PART BELOW */
+  onFocus={() => {
+    setTimeout(() => {
+      // 1. Scroll the message list to the bottom
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      // 2. Ensure the input itself is visible above the keyboard
+      inputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 300); // 300ms is the standard time it takes a keyboard to slide up
+  }}
+/>
         <button 
           className="send-circle-btn" 
           onClick={askAI} 
