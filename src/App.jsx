@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import "./App.css";
 
 function App() {
@@ -8,13 +7,21 @@ function App() {
   const [chatHistory, setChatHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  // Reverting to your specific model ID
-  const [modelId] = useState("models/gemma-3-1b-it");
 
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // --- Confetti Logic (Unchanged) ---
+  // --- Scrolling Logic ---
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Automatically scroll when messages update or loading state changes
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatHistory, loading]);
+
+  // --- Confetti Logic ---
   useEffect(() => {
     const canvas = document.createElement("canvas");
     canvas.className = "bg-confetti";
@@ -22,12 +29,15 @@ function App() {
     const ctx = canvas.getContext("2d");
     const colors = ["#6d28d9", "#a78bfa", "#ffffff"];
     let particles = [];
+    
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
+    
     window.addEventListener("resize", resize);
     resize();
+
     for (let i = 0; i < 60; i++) {
       particles.push({
         x: Math.random() * canvas.width,
@@ -38,6 +48,7 @@ function App() {
         speed: 0.5 + Math.random() * 1.5,
       });
     }
+
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach((p) => {
@@ -51,76 +62,80 @@ function App() {
       });
       requestAnimationFrame(update);
     };
+    
     update();
+    
     return () => {
       window.removeEventListener("resize", resize);
-      document.body.removeChild(canvas);
+      if (document.body.contains(canvas)) {
+        document.body.removeChild(canvas);
+      }
     };
   }, []);
 
-  // --- Onboarding (Unchanged) ---
+  // --- Onboarding ---
   useEffect(() => {
     if (!showChat || chatHistory.length > 0) return;
     setChatHistory([{
       role: "model",
-      text: `A new year doesn’t ask for perfection. Just honesty.\nWhat’s one promise you quietly made to yourself?`,
+      text: "A new year doesn’t ask for perfection. Just honesty.\nWhat’s one promise you quietly made to yourself?",
       important: false,
     }]);
     setTimeout(() => inputRef.current?.focus(), 120);
-  }, [showChat]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+  }, [showChat, chatHistory.length]);
 
   const askAI = async () => {
-  if (!question.trim() || loading) return;
+    if (!question.trim() || loading) return;
 
-  setLoading(true);
-  setError("");
-  
-  const currentQuestion = question;
-  const userMsg = { role: "user", text: currentQuestion };
-  const updatedHistory = [...chatHistory, userMsg];
-  
-  setChatHistory(updatedHistory);
-  setQuestion("");
+    setLoading(true);
+    setError("");
+    
+    const currentQuestion = question;
+    const userMsg = { role: "user", text: currentQuestion };
+    const updatedHistory = [...chatHistory, userMsg];
+    
+    setChatHistory(updatedHistory);
+    setQuestion("");
 
-  try {
-    // Construct the transcript for memory
-    const historyContext = updatedHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join("\n");
-    const fullPrompt = `You are a friendly and helpful ONWARD chatbot. Be encouraging and concise.\n\nConversation History:\n${historyContext}\n\nAssistant:`;
+    try {
+      const historyContext = updatedHistory
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+        .join("\n");
+        
+      const fullPrompt = `You are a friendly and helpful ONWARD chatbot. Be encouraging and concise.\n\nConversation History:\n${historyContext}\n\nAssistant:`;
 
-    // Talk to YOUR Vercel Proxy, not Google directly
-    const resp = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: fullPrompt }),
-    });
+      const resp = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: fullPrompt }),
+      });
 
-    const data = await resp.json();
+      const data = await resp.json();
 
-    if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(data.error);
 
-    const importantMatch = /win|celebrat|onward|congrat|proud/i;
-    setChatHistory(prev => [...prev, { 
-      role: 'model', 
-      text: data.text, 
-      important: importantMatch.test(data.text) 
-    }]);
-  } catch (err) {
-    console.error(err);
-    setError("Connection lost. Check if GENERATIVE_API_KEY is set in Vercel.");
-  } finally {
-    setLoading(false);
-  }
-};
+      const importantMatch = /win|celebrat|onward|congrat|proud/i;
+      setChatHistory(prev => [...prev, { 
+        role: 'model', 
+        text: data.text, 
+        important: importantMatch.test(data.text) 
+      }]);
+    } catch (err) {
+      console.error(err);
+      setError("Connection lost. Check your API configuration.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!showChat) {
     return (
       <div className="welcome-container">
         <h1>ONWARD</h1>
         <p>“I’m here to remind you of what you promised yourself.”</p>
-        <button className="start-btn" onClick={() => setShowChat(true)}>Start Your Resolution</button>
+        <button className="start-btn" onClick={() => setShowChat(true)}>
+          Start Your Resolution
+        </button>
       </div>
     );
   }
@@ -129,19 +144,29 @@ function App() {
     <div className="app-container">
       <div className="chat-history">
         {chatHistory.map((msg, i) => (
-          <div key={i} className={`message ${msg.role === "user" ? "user-message" : "ai-message"} ${msg.important ? "important" : ""}`}>
+          <div 
+            key={i} 
+            className={`message ${msg.role === "user" ? "user-message" : "ai-message"} ${msg.important ? "important" : ""}`}
+          >
             {msg.text}
           </div>
         ))}
+        
         {loading && (
           <div className="message ai-message">
-            <div className="typing-indicator"><span></span><span></span><span></span></div>
+            <div className="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
           </div>
         )}
         <div ref={chatEndRef} />
       </div>
 
-      {error && <div className="error-message" style={{color: 'red', textAlign: 'center'}}>{error}</div>}
+      {error && (
+        <div className="error-message" style={{ color: 'red', textAlign: 'center', padding: '10px' }}>
+          {error}
+        </div>
+      )}
 
       <div className="input-area">
         <textarea
@@ -151,9 +176,13 @@ function App() {
           onChange={(e) => setQuestion(e.target.value)}
           ref={inputRef}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), askAI())}
+          onFocus={() => setTimeout(scrollToBottom, 300)}
         />
-        {/* CENTERED BUTTON LOGIC */}
-        <button className="send-circle-btn" onClick={askAI} disabled={loading}>
+        <button 
+          className="send-circle-btn" 
+          onClick={askAI} 
+          disabled={loading}
+        >
           {loading ? "..." : <span className="arrow-icon">➤</span>}
         </button>
       </div>
