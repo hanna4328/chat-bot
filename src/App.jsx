@@ -143,177 +143,75 @@ function App() {
     return () => clearInterval(timer);
   }, [cooldownMs]);
 
-  const askAI = async () => {
-    if (!question.trim()) return;
+ const askAI = async () => {
+  if (!question.trim()) return;
 
-    // If the user tries to send again too quickly (typingThreshold), show a short advisory wait (2s)
-    if (lastRequestTime.current) {
-      const timeSinceLastRequest = Date.now() - lastRequestTime.current;
-      if (timeSinceLastRequest < typingThreshold) {
-        // show a short 2 second wait message (user requested "wait two seconds")
-        const advisoryMs = 2000;
-        setError(`Please wait ${Math.ceil(advisoryMs / 1000)} seconds before trying again`);
-        // set a short cooldown UI so the message is visible
-        setCooldownMs(advisoryMs);
-        lastRequestTime.current = Date.now();
-        // don't send the request
+  // If the user tries to send again too quickly (typingThreshold), show a short advisory wait (2s)
+  if (lastRequestTime.current) {
+    const timeSinceLastRequest = Date.now() - lastRequestTime.current;
+    if (timeSinceLastRequest < typingThreshold) {
+      const advisoryMs = 2000;
+      setError(`Please wait ${Math.ceil(advisoryMs / 1000)} seconds before trying again`);
+      setCooldownMs(advisoryMs);
+      lastRequestTime.current = Date.now();
+      return;
+    }
+    if (cooldownMs > 0) {
+      const timeSince = Date.now() - lastRequestTime.current;
+      if (timeSince < cooldownMs) {
+        setError(
+          `Please wait ${Math.ceil((cooldownMs - timeSince) / 1000)} seconds before trying again`
+        );
         return;
       }
-      // if there is an explicit server-suggested cooldown (cooldownMs > 0), enforce it
-      if (cooldownMs > 0) {
-        const timeSince = Date.now() - lastRequestTime.current;
-        if (timeSince < cooldownMs) {
-          setError(
-            `Please wait ${Math.ceil((cooldownMs - timeSince) / 1000)} seconds before trying again`
-          );
-          return;
-        }
-      }
     }
-
-    setLoading(true);
-    setError("");
-    const userMessage = { role: "user", text: question };
-    setChatHistory((prev) => [...prev, userMessage]);
-    setQuestion("");
-
-    try {
-      // Prefer server-side proxy for API calls. Falls back to client SDK if proxy unavailable.
-      const context =
-        "You are a friendly and helpful ONWARD chatbot. Be encouraging, reflective, and concise.";
-      const prompt = `${context}\n\nUser question: ${question}`;
-
-      // Resolve backend URL (can be set via Vercel env VITE_API_BASE)
-      const API_BASE = import.meta.env.VITE_API_BASE || '';
-      const apiBaseClean = API_BASE ? API_BASE.replace(/\/$/, '') : '';
-      const apiUrl = apiBaseClean ? `${apiBaseClean}/api/generate` : '/api/generate';
-
-      // Call backend proxy
-      let data;
-      try {
-        const resp = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, modelId }),
-        });
-        if (!resp.ok) {
-          const errBody = await resp.text();
-          throw new Error(`Proxy error ${resp.status}: ${errBody}`);
-        }
-        data = await resp.json();
-      } catch (proxyErr) {
-        console.warn('Proxy call failed, falling back to client SDK:', proxyErr);
-        // Fall back to client SDK if available
-        const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: modelId });
-        const result = await model.generateContent(prompt);
-        data = result;
-      }
-
-      // Extract text from proxy/SDK response shapes
-      let text = '';
-      try {
-        if (!data) throw new Error('Empty response');
-        if (typeof data === 'string') text = data;
-        else if (data.output && Array.isArray(data.output) && data.output[0]?.content) {
-          text = data.output[0].content;
-        } else if (data.candidates && Array.isArray(data.candidates) && data.candidates[0]?.content) {
-          text = data.candidates[0].content;
-        } else if (data.outputText) {
-          text = data.outputText;
-        } else if (data.response && typeof data.response === 'object') {
-          // sometimes nested
-          text = JSON.stringify(data.response).slice(0, 2000);
-        } else {
-          text = JSON.stringify(data).slice(0, 2000);
-        }
-      } catch (ex) {
-        console.error('Failed to extract text from response:', ex, data);
-        throw ex;
-      }
-
-      const importantMatch = /win|celebrat|onward|small win|congrat|glad|proud/i;
-      const isImportant = importantMatch.test(String(text || ''));
-      const aiMessage = { role: 'model', text, important: isImportant };
-      setChatHistory((prev) => [...prev, aiMessage]);
-      lastRequestTime.current = Date.now();
-    } catch (error) {
-      // Log full error for debugging (kept in console only)
-      console.error("Error asking AI:", error);
-
-      // Inspect HTTP status and message to give a better user-facing error
-      const status = error?.response?.status || error?.status;
-      const msg = error?.message || String(error);
-
-      let userMessage = "An error occurred. Please check your API key and model selection.";
-
-      // Remote rate limit (HTTP 429) or SDK quota message
-  if (status === 429 || /rate limit|quota|429/i.test(msg)) {
-        // Try to read Retry-After header if present
-        const ra = error?.response?.headers?.['retry-after'] || error?.response?.headers?.['Retry-After'];
-        const retrySec = ra ? parseInt(ra, 10) || 15 : 15;
-        userMessage = `Rate limit exceeded. Please wait ${retrySec} seconds before trying again.`;
-        // enforce local cooldown and set cooldown duration from server
-        lastRequestTime.current = Date.now();
-        setCooldownMs(retrySec * 1000);
-      } else if (/not found|404/i.test(msg) || status === 404) {
-        userMessage = "Requested model is not available for this API/version. Try a different model or call ListModels to see supported models.";
-      } else if (status === 401 || status === 403) {
-        userMessage = `API error (${status}). Check your API key, project permissions, and billing.`;
-      }
-
-      setError(userMessage);
-      // Revert user message if AI fails
-      setChatHistory((prev) => prev.slice(0, -1));
-    }
-
-    setLoading(false);
-  };
-
-  // Fetch available models from the SDK and show them in the UI for selection
-  const fetchModels = async () => {
-    setModelsLoading(true);
-    setError("");
-    try {
-      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-      const genAI = new GoogleGenerativeAI(API_KEY);
-
-      let res;
-      if (typeof genAI.listModels === "function") {
-        res = await genAI.listModels();
-      } else if (genAI.models && typeof genAI.models.list === "function") {
-        res = await genAI.models.list();
-      } else {
-        throw new Error("SDK does not expose a listModels method. Check SDK docs or upgrade @google/generative-ai.");
-      }
-
-      // Normalize model list for UI
-      // SDK may return { models: [...] } or { data: [...] } or an array directly
-      const models = res?.models || res?.data || res;
-      const arr = Array.isArray(models) ? models : [];
-      setAvailableModels(arr);
-    } catch (err) {
-      console.error("Failed to list models:", err);
-      setError("Failed to list models. Check your API key and network.");
-    } finally {
-      setModelsLoading(false);
-    }
-  };
-
-  if (!showChat) {
-    return (
-      <div className="welcome-container">
-        <h1>ONWARD</h1>
-        <p>“I’m here to remind you of what you promised yourself.”</p>
-        <p style={{ maxWidth: 560 }}>
-          Small, steady actions. Gentle accountability. Come in and tell me one promise you made to
-          yourself — I’ll keep you company.
-        </p>
-        <button onClick={() => setShowChat(true)}>Start Your Resolution</button>
-      </div>
-    );
   }
+
+  setLoading(true);
+  setError("");
+
+  const userMessage = { role: "user", text: question };
+  setChatHistory((prev) => [...prev, userMessage]);
+  setQuestion("");
+
+  try {
+    const context =
+      "You are a friendly and helpful ONWARD chatbot. Be encouraging, reflective, and concise.";
+    const prompt = `${context}\n\nUser question: ${question}`;
+
+    // 🔒 SECURE SERVERLESS CALL (ONLY CHANGE)
+    const resp = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`Server error ${resp.status}: ${errBody}`);
+    }
+
+    const data = await resp.json();
+
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "I’m here with you.";
+
+    const importantMatch = /win|celebrat|onward|small win|congrat|glad|proud/i;
+    const isImportant = importantMatch.test(String(text));
+
+    const aiMessage = { role: "model", text, important: isImportant };
+    setChatHistory((prev) => [...prev, aiMessage]);
+
+    lastRequestTime.current = Date.now();
+  } catch (error) {
+    console.error("Error asking AI:", error);
+    setError("An error occurred. Please try again.");
+    setChatHistory((prev) => prev.slice(0, -1));
+  }
+
+  setLoading(false);
+};
 
   return (
     <div className="app-container">
